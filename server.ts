@@ -7,9 +7,8 @@ import yts from "youtube-search-api";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function startServer() {
+export async function createServer() {
   const app = express();
-  const PORT = 3000;
 
   app.use(express.json());
 
@@ -47,16 +46,30 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    // In production (like Vercel), we expect static files to be served by the platform
+    // or we serve them from the dist folder if running as a standalone server.
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      // In Vercel, this might not be reached if vercel.json rewrites are used,
+      // but it's good for local production testing.
+      if (path.extname(req.path)) {
+        res.status(404).end();
+      } else {
+        res.sendFile(path.join(distPath, "index.html"));
+      }
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Aura DJ Server running on http://localhost:${PORT}`);
-  });
+  return app;
 }
 
-startServer();
+// Only start the server if this file is run directly
+if (process.env.NODE_ENV !== "production" && (process.argv[1] === __filename || process.argv[1]?.endsWith("server.ts"))) {
+  createServer().then(app => {
+    const PORT = 3000;
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Aura DJ Server running on http://localhost:${PORT}`);
+    });
+  });
+}
