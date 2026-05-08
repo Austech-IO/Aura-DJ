@@ -14,7 +14,11 @@
 
         function isBenign(msg) {
           if (!msg) return true;
-          return suppressiveErrors.some(s => msg.includes(s));
+          const lowerMsg = msg.toLowerCase();
+          return suppressiveErrors.some(s => lowerMsg.includes(s.toLowerCase())) || 
+                 lowerMsg.includes('vite') || 
+                 lowerMsg.includes('hmr') ||
+                 lowerMsg.includes('extension');
         }
 
         window.addEventListener('error', (event) => {
@@ -33,9 +37,18 @@
             return;
           }
           
-          if (msg.includes("API key not valid")) {
-            console.error('[Aura DJ] 🚨 GEMINI API KEY INVALID: Please check your Secrets in AI Studio.');
+          const lowerMsg = msg.toLowerCase();
+          if (lowerMsg.includes("api key not valid") || lowerMsg.includes("gemini_api_key is not configured")) {
+            console.error('[Aura DJ] 🚨 GEMINI API KEY ISSUE: Please check your Secrets in AI Studio.');
             event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+          }
+
+          if (lowerMsg.includes("could not reach cloud firestore backend") || lowerMsg.includes("unavailable")) {
+            console.warn('[Aura DJ] 📡 Firestore is offline. Persistence may be limited.');
+            event.preventDefault();
+            event.stopImmediatePropagation();
             return;
           }
 

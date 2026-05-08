@@ -36,7 +36,10 @@ export async function generatePlaylist(userInput: string, history: string[] = []
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userInput, history })
     });
-    if (!response.ok) throw new Error("AI Signal Lost");
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || "AI Signal Lost");
+    }
     return await response.json();
   } catch (error) {
     console.error("Gemini Generate Playlist Error:", error);
@@ -51,7 +54,10 @@ export async function generateSongExperience(title: string, artist: string): Pro
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, artist })
     });
-    if (!response.ok) throw new Error("Experience interpretation failed");
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || "Experience interpretation failed");
+    }
     return await response.json();
   } catch (error) {
     return getFallbackExperience(title, artist);
@@ -118,7 +124,10 @@ export async function generateDJResponse(message: string, history: string[] = []
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, history })
     });
-    if (!response.ok) throw new Error("Aura connection unstable...");
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || "Aura connection unstable...");
+    }
     return await response.json();
   } catch (error) {
     console.error("Gemini DJ Engine Error:", error);
@@ -139,7 +148,10 @@ export async function generateProfileInsights(history: any[]): Promise<ProfileIn
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ history })
     });
-    if (!response.ok) throw new Error("Neural insights failed");
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || "Neural insights failed");
+    }
     return await response.json();
   } catch (error) {
     console.error("Gemini Profile Insights Error:", error);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Search, 
@@ -234,14 +234,14 @@ export default function App() {
     }
   }, [activeTrack]);
 
-  const handleAcceptSuggestion = () => {
+  const handleAcceptSuggestion = useCallback(() => {
     if (suggestion) {
       setSidebarTab('aura');
       setShowSidebar(true);
       auraChat.setInput(suggestion);
       clearSuggestion();
     }
-  };
+  }, [suggestion, auraChat.setInput, clearSuggestion]);
 
   const handleSignIn = async () => {
     setIsAuthLoading(true);

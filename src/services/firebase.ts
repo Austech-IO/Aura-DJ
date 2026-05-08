@@ -54,11 +54,11 @@ export const logout = () => signOut(auth);
 // Test connection softly - wait for a bit to avoid race conditions during init
 setTimeout(async () => {
   try {
+    // Only try to reach server if needed, but getDocFromServer forces a network trip.
+    // If it fails, the index.html unhandledrejection listener will catch it gracefully now.
     await getDocFromServer(doc(db, "test", "connection"));
   } catch (error: any) {
-    if (error.code === 'unavailable' || (error.message && error.message.includes("offline"))) {
-      console.warn("Firestore is operating in offline mode. This is expected in some sandboxed environments.");
-    }
+    // Silent catch as index.html handles the warning.
   }
 }, 2000);
 

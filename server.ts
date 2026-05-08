@@ -19,14 +19,24 @@ function getAI() {
       throw new Error("GEMINI_API_KEY missing from environment");
     }
     
-    if (apiKey.includes("MY_GEMINI_API_KEY") || apiKey.length < 10) {
-      console.error("GEMINI_API_KEY appears to be a placeholder or invalid string.");
+    if (apiKey.includes("MY_GEMINI_API_KEY") || apiKey.length < 5) {
+      console.warn("GEMINI_API_KEY appears to be a placeholder. AI features will be disabled.");
       return new Proxy({}, {
-        get: () => ({
-          generateContent: async () => {
-            throw new Error("GEMINI_API_KEY is not configured. Please add your key in the AI Studio Secrets panel.");
+        get: (_target, prop) => {
+          if (prop === 'models' || prop === 'generateContent') {
+            return {
+              generateContent: async () => {
+                throw new Error("GEMINI_API_KEY is not configured. Please add your key in the AI Studio Secrets panel.");
+              }
+            };
           }
-        })
+          // Handle recursive access for ai.models.generateContent
+          return () => ({
+            generateContent: async () => {
+              throw new Error("GEMINI_API_KEY is not configured. Please add your key in the AI Studio Secrets panel.");
+            }
+          });
+        }
       }) as any;
     } else {
       console.log(`Gemini SDK initialized with key: ${apiKey.substring(0, 6)}...`);
@@ -39,11 +49,14 @@ function getAI() {
 
 function formatGeminiError(error: any) {
   const message = error?.message || String(error);
-  if (message.includes("API key not valid")) {
-    return "Invalid Gemini API Key. Please verify your secrets in the AI Studio settings.";
+  if (message.includes("API key not valid") || message.includes("not configured")) {
+    return "Gemini API Configuration Issue. Please verify your Secrets in AI Studio.";
   }
   if (message.includes("User location is not supported")) {
     return "Gemini API is not available in your current region.";
+  }
+  if (message.includes("quota") || message.includes("429")) {
+    return "AI Rate limit reached. Please try again in a moment.";
   }
   return message;
 }

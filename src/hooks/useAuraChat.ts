@@ -88,8 +88,18 @@ export function useAuraChat() {
           setNextTrack(nextTrk);
         }
       }
-    } catch (error) {
-      setMessages(prev => [...prev, { role: 'aura', text: "Signal interference detected. Please retry." }]);
+    } catch (error: any) {
+      console.error("Aura Chat Error:", error);
+      let errorMsg = "Signal interference detected. Please retry.";
+      if (error?.message) {
+        try {
+          const parsed = JSON.parse(error.message);
+          errorMsg = parsed.error || errorMsg;
+        } catch (e) {
+          errorMsg = error.message;
+        }
+      }
+      setMessages(prev => [...prev, { role: 'aura', text: errorMsg }]);
     } finally {
       setIsLoading(false);
     }

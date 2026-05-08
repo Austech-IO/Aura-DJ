@@ -48,8 +48,10 @@ export function useAuraSuggestions(activeTrack: Track | null, isOverlayOpen: boo
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [lastFocusTime, triggerSuggestion]);
 
+  const clearSuggestion = useCallback(() => setSuggestion(null), []);
+
   return {
     suggestion,
-    clearSuggestion: () => setSuggestion(null)
+    clearSuggestion
   };
 }

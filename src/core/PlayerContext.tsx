@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Track, Playlist } from '../types';
 import { OfflineService } from '../services/offlineService';
 
@@ -440,7 +440,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(progressInterval.current);
   }, [isPlaying]);
 
-  const value = {
+  const value = useMemo(() => ({
     activeTrack,
     queue,
     currentIndex,
@@ -474,7 +474,41 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     insertTrack,
     setDjConfig,
     setNextTrack
-  };
+  }), [
+    activeTrack,
+    queue,
+    currentIndex,
+    isPlaying,
+    currentTime,
+    duration,
+    buffered,
+    pinnedIds,
+    downloadedIds,
+    volume,
+    repeatMode,
+    isShuffled,
+    playTrack,
+    togglePlay,
+    playNext,
+    playPrev,
+    setVolume,
+    seekTo,
+    setQueue,
+    removeTrack,
+    addTrackToQueue,
+    togglePinTrack,
+    toggleDownloadTrack,
+    toggleShuffle,
+    toggleRepeat,
+    undo,
+    history.length,
+    showUndoToast,
+    setShowUndoToast,
+    insertNext,
+    insertTrack,
+    setDjConfig,
+    setNextTrack
+  ]);
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
 };
