@@ -1,22 +1,53 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
     <script>
-      // Suppress Vite HMR connection errors which are common in this environment
-      window.addEventListener('unhandledrejection', (event) => {
-        if (event.reason && event.reason.message && 
-           (event.reason.message.includes('WebSocket') || event.reason.message.includes('vite'))) {
-          event.preventDefault();
+      // Early diagnostic & suppression system for sandboxed environments
+      (function() {
+        const suppressiveErrors = [
+          'Script error.',
+          'ResizeObserver loop',
+          'Non-Error promise rejection',
+          'WebSocket connection',
+          'vite:hmr'
+        ];
+
+        function isBenign(msg) {
+          if (!msg) return true;
+          return suppressiveErrors.some(s => msg.includes(s));
         }
-      });
+
+        window.addEventListener('error', (event) => {
+          if (isBenign(event.message)) {
+            event.stopImmediatePropagation();
+            return;
+          }
+          console.error('[Aura DJ Diagnostic]:', event.error || event.message);
+        }, true);
+
+        window.addEventListener('unhandledrejection', (event) => {
+          const msg = event.reason?.message || String(event.reason || '');
+          if (isBenign(msg)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+          }
+          
+          if (msg.includes("API key not valid")) {
+            console.error('[Aura DJ] 🚨 GEMINI API KEY INVALID: Please check your Secrets in AI Studio.');
+            event.preventDefault();
+            return;
+          }
+
+          console.error('[Aura DJ Promise Diagnostic]:', event.reason);
+        }, true);
+      })();
     </script>
+    <meta charset="UTF-8" />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" crossorigin src="/src/main.tsx"></script>
   </body>
 </html>
 

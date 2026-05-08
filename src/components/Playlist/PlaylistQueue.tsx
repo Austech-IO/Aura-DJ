@@ -1,6 +1,6 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Music2 } from 'lucide-react';
+import { motion, AnimatePresence, Reorder } from 'motion/react';
+import { Music2, Trash2, GripVertical, Download, Lock, PlusCircle } from 'lucide-react';
 import { Track, SongExperience } from '../../types';
 import { usePlayer } from '../../core/PlayerContext';
 import { SectionLabel } from '../ui/SectionLabel';
@@ -16,7 +16,43 @@ export const PlaylistQueue: React.FC<PlaylistQueueProps> = ({
   isExpLoading, 
   songExperience 
 }) => {
-  const { queue, activeTrack, playTrack, isPlaying } = usePlayer();
+  const { 
+    queue, 
+    currentIndex, 
+    playTrack, 
+    setQueue, 
+    removeTrack, 
+    pinnedIds, 
+    togglePinTrack, 
+    downloadedIds, 
+    toggleDownloadTrack,
+    insertNext
+  } = usePlayer();
+
+  const activeTrack = currentIndex >= 0 ? queue[currentIndex] : null;
+  const upcomingTracks = queue.slice(currentIndex + 1);
+  const previousTracks = queue.slice(0, currentIndex);
+
+  const [recentlyInserted, setRecentlyInserted] = React.useState<string[]>([]);
+
+  const prevQueueIds = React.useRef<string[]>([]);
+  React.useEffect(() => {
+    const currentIds = queue.map(t => t.searchQuery);
+    const newItems = currentIds.filter(id => !prevQueueIds.current.includes(id));
+    
+    if (newItems.length > 0) {
+      setRecentlyInserted(prev => [...prev, ...newItems]);
+      setTimeout(() => {
+        setRecentlyInserted(prev => prev.filter(id => !newItems.includes(id)));
+      }, 3000);
+    }
+    
+    prevQueueIds.current = currentIds;
+  }, [queue]);
+
+  const handleReorder = (newOrder: Track[]) => {
+    setQueue(newOrder);
+  };
 
   if (!queue.length && !isLoading) {
     return (
@@ -47,42 +83,154 @@ export const PlaylistQueue: React.FC<PlaylistQueueProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-12 relative z-10 w-full">
-      <div className="grid gap-px bg-white/5 border border-white/5 overflow-hidden h-fit">
-        {queue.map((track, i) => (
-          <div 
-            key={i}
-            onClick={() => playTrack(track)}
-            className={`group flex items-center p-4 md:p-6 transition-all cursor-pointer ${
-              activeTrack?.searchQuery === track.searchQuery 
-                ? 'text-black' 
-                : 'hover:bg-white/5'
-            }`}
-            style={activeTrack?.searchQuery === track.searchQuery ? { backgroundColor: 'var(--accent-color)' } : {}}
-          >
-            <span className={`font-mono w-16 text-sm ${activeTrack?.searchQuery === track.searchQuery ? 'opacity-100' : 'opacity-20'}`}>
-              {String(i + 1).padStart(2, '0')}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-4">
-                <h3 className="text-xl font-semibold tracking-tight uppercase truncate">{track.title}</h3>
-                <span className={`text-[9px] font-mono whitespace-nowrap ${activeTrack?.searchQuery === track.searchQuery ? 'opacity-60' : 'opacity-20'}`}>
-                  {track.year} • {track.genre}
-                </span>
-              </div>
-              <p className={`text-[10px] uppercase font-mono tracking-widest truncate ${activeTrack?.searchQuery === track.searchQuery ? 'opacity-70' : 'opacity-40'}`}>
-                {track.artist} — {track.album}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 relative z-10 w-full px-4 lg:px-12 py-12">
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <SectionLabel>Signal Pipeline</SectionLabel>
+          <div className="flex items-center gap-4">
+            <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.2em]">{queue.length} Tracks</span>
+          </div>
+        </div>
+        
+        <div className="space-y-12">
+          {/* Currently Playing */}
+          {activeTrack && (
+            <div className="space-y-4">
+              <p className="text-[9px] font-mono text-accent uppercase tracking-[0.3em] flex items-center gap-2">
+                <span className="w-1 h-1 bg-accent animate-pulse rounded-full" />
+                Active Transmission
               </p>
-            </div>
-            
-            <div className="flex items-center gap-8 ml-8">
-              <div className={`text-[10px] font-mono uppercase tracking-widest ${activeTrack?.searchQuery === track.searchQuery ? 'font-bold' : 'opacity-40'}`}>
-                {activeTrack?.searchQuery === track.searchQuery ? 'RESONATING' : track.duration}
+              <div className="glass-saas border-accent/20 bg-accent/[0.03] p-5 rounded-2xl flex items-center group relative overflow-hidden">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-2xl font-bold tracking-tight uppercase truncate text-accent shadow-[0_0_20px_rgba(204,255,0,0.1)]">
+                    {activeTrack.title}
+                  </h3>
+                  <p className="text-xs font-mono text-accent/60 uppercase tracking-widest mt-1">
+                    {activeTrack.artist}
+                  </p>
+                </div>
+                <div className="flex items-center gap-8">
+                   <div className="text-right">
+                     <p className="text-[9px] font-mono text-white/20 uppercase">Duration</p>
+                     <p className="text-sm font-mono text-white/60">{activeTrack.duration}</p>
+                   </div>
+                   <div className="h-10 w-px bg-white/10" />
+                   <div className="text-right">
+                     <p className="text-[9px] font-mono text-white/20 uppercase">Index</p>
+                     <p className="text-sm font-mono text-white/60">#{(currentIndex + 1).toString().padStart(2, '0')}</p>
+                   </div>
+                </div>
               </div>
-              <div className={`w-16 h-px ${activeTrack?.searchQuery === track.searchQuery ? 'bg-black/20' : 'bg-white/10 group-hover:w-24 transition-all'}`}></div>
+            </div>
+          )}
+
+          {/* Up Next */}
+          <div className="space-y-4">
+            <p className="text-[9px] font-mono text-white/20 uppercase tracking-[0.3em]">Neural Queue // Distribution</p>
+            <div className="glass-saas rounded-2xl overflow-hidden border border-white/5 backdrop-blur-3xl shadow-2xl">
+              <Reorder.Group 
+                axis="y" 
+                values={queue} 
+                onReorder={(n) => setQueue(n)}
+                className="divide-y divide-white/[0.03]"
+              >
+                {queue.map((track, i) => {
+                  const isPlaying = i === currentIndex;
+                  
+                  return (
+                    <Reorder.Item 
+                      key={track.searchQuery + i} 
+                      value={track}
+                      layout
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      className={`group flex items-center p-3 md:p-5 transition-all cursor-pointer select-none relative ${
+                        isPlaying 
+                          ? 'bg-accent/10 border-l-2 border-accent' 
+                          : recentlyInserted.includes(track.searchQuery)
+                            ? 'border-l-2 border-accent'
+                            : 'hover:bg-white/[0.03]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 w-10 shrink-0">
+                        <GripVertical className={`w-3 h-3 opacity-0 group-hover:opacity-10 shadow-sm transition-opacity cursor-grab active:cursor-grabbing ${isPlaying ? 'text-accent' : 'text-white'}`} />
+                        <span className={`font-mono text-[10px] ${isPlaying ? 'text-accent font-bold' : 'text-white/20'}`}>
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                      </div>
+
+                      <div 
+                        className="flex-1 min-w-0 px-4"
+                        onClick={() => playTrack(track, { index: i })}
+                      >
+                        <h3 className={`text-sm md:text-base font-bold tracking-tight uppercase truncate transition-colors ${isPlaying ? 'text-accent shadow-accent/20 blur-[0.2px]' : 'text-accent/90 group-hover:text-accent'}`}>
+                          {track.title}
+                        </h3>
+                        <div className="flex items-center gap-3 mt-1">
+                          <p className={`text-[10px] uppercase font-mono tracking-widest truncate ${isPlaying ? 'text-accent/60' : 'text-white/30'}`}>
+                            {track.artist}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 md:gap-4 ml-4">
+                        {!isPlaying && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              insertNext(track);
+                            }}
+                            className="p-2 rounded-full text-white/10 hover:text-accent opacity-0 group-hover:opacity-100 transition-all flex items-center gap-2"
+                            title="Play Next"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleDownloadTrack(track);
+                          }}
+                          className={`p-2 rounded-full transition-all flex items-center gap-2 ${
+                            downloadedIds.includes(track.searchQuery)
+                              ? 'text-blue-400 opacity-100 group-hover:scale-110'
+                              : 'text-white/10 hover:text-white opacity-0 group-hover:opacity-100'
+                          } ${isPlaying ? 'text-accent/40' : ''}`}
+                        >
+                           <Download className={`w-3.5 h-3.5 ${downloadedIds.includes(track.searchQuery) ? 'fill-current' : ''}`} />
+                        </button>
+
+                        <div className={`text-[10px] font-mono tracking-widest tabular-nums ${isPlaying ? 'text-accent' : 'text-white/40'}`}>
+                          {track.duration}
+                        </div>
+
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeTrack(i);
+                          }}
+                          className={`p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500/10 ${isPlaying ? 'text-accent/40' : 'text-white/10 hover:text-red-400'}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {isPlaying && (
+                        <motion.div 
+                          layoutId="playing-pulse"
+                          className="absolute inset-0 bg-accent/[0.02] pointer-events-none"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                        />
+                      )}
+                    </Reorder.Item>
+                  );
+                })}
+              </Reorder.Group>
             </div>
           </div>
-        ))}
+        </div>
       </div>
 
       <div className="space-y-12">

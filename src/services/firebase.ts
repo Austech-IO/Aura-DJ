@@ -8,11 +8,15 @@ import {
   indexedDBLocalPersistence,
   initializeAuth
 } from "firebase/auth";
-import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
+import { initializeFirestore, doc, getDocFromServer } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Use experimentalForceLongPolling to bypass potential proxy/firewall issues in sandboxed environments
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId);
 
 // Initialize Auth with persistence and explicit resolver to mitigate sandbox issues
 export const auth = initializeAuth(app, {
@@ -84,7 +88,11 @@ export interface FirestoreErrorInfo {
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleFirestoreError(error: any, operationType: OperationType, path: string | null) {
+  // Only throw the special JSON error for permission issues to help the system diagnose rules.
+  // Other errors like 'unavailable' should be logged but not necessarily crash the diagnostic layer.
+  const isPermissionError = error?.code === 'permission-denied' || (error?.message && error.message.includes('permission'));
+  
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -101,6 +109,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  
+  if (isPermissionError) {
+    console.error('Firestore Permission Error: ', JSON.stringify(errInfo));
+    throw new Error(JSON.stringify(errInfo));
+  } else {
+    console.warn(`Firestore ${operationType} Error on ${path}:`, error?.code || error?.message || error);
+  }
 }

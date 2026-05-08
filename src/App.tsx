@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Search, 
   Play, 
@@ -9,6 +9,7 @@ import {
   Sparkles,
   ChevronRight,
   Music2,
+  X,
 } from "lucide-react";
 import { auth, db, logout, handleFirestoreError, OperationType } from "./services/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
@@ -29,13 +30,20 @@ import { Playlist, Track } from "./types";
 import { usePlayer } from "./core/PlayerContext";
 import { YouTubePlayer } from "./components/Player/YouTubePlayer";
 import { AuraAssistant } from "./components/Chat/AuraAssistant";
+import { LyricsOverlay } from "./components/Player/LyricsOverlay";
 import { useSongExperience } from "./hooks/useSongExperience";
+import { useAuraChat } from "./hooks/useAuraChat";
 import { signIn } from "./services/firebase";
 import { EditorialBg } from "./components/Layout/EditorialBg";
 import { SectionLabel } from "./components/ui/SectionLabel";
 import { PlaylistQueue } from "./components/Playlist/PlaylistQueue";
 import { PlayerControls } from "./components/Player/PlayerControls";
 import { MoodProtocol } from "./components/Sidebar/MoodProtocol";
+import { ProfilePage } from "./components/Profile/ProfilePage";
+import { AuraSession } from "./services/session";
+import { useAuraSuggestions } from "./hooks/useAuraSuggestions";
+import { SuggestionChip } from "./components/Chat/SuggestionChip";
+import { UndoToast } from "./components/Chat/UndoToast";
 
 declare global {
   interface Window {
@@ -53,9 +61,24 @@ export default function App() {
     playTrack,
     setQueue,
     queue: playlistQueue,
+    currentIndex,
+    undo,
+    showUndoToast,
+    setShowUndoToast
   } = usePlayer();
 
   const { songExperience, isExpLoading } = useSongExperience(activeTrack);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const [showSidebar, setShowSidebar] = useState(isDesktop);
+  const auraChat = useAuraChat();
+  const { suggestion, clearSuggestion } = useAuraSuggestions(activeTrack, showSidebar);
 
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [input, setInput] = useState("");
@@ -64,14 +87,27 @@ export default function App() {
   const [history, setHistory] = useState<Playlist[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<'mood' | 'aura'>('mood');
+  const [activeView, setActiveView] = useState<'player' | 'profile'>('player');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
     });
+
+    // Load Spotify SDK
+    if (!document.getElementById('spotify-player-sdk')) {
+      const script = document.createElement('script');
+      script.id = 'spotify-player-sdk';
+      script.src = "https://sdk.scdn.co/spotify-player.js";
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.onerror = (e) => console.warn("Spotify SDK load potential issue (non-fatal):", e);
+      document.body.appendChild(script);
+    }
+
     return unsubscribe;
   }, []);
 
@@ -103,8 +139,11 @@ export default function App() {
       const latest = history[0];
       setCurrentPlaylist(latest);
       setQueue(latest.tracks);
+      if (latest.tracks.length > 0) {
+        playTrack(latest.tracks[0]);
+      }
     }
-  }, [history, currentPlaylist, isLoading, setQueue]);
+  }, [history, currentPlaylist, isLoading, setQueue, playTrack]);
 
   const clearHistory = async () => {
     if (!user || !confirm("Clear all session history?")) return;
@@ -127,6 +166,7 @@ export default function App() {
 
     setIsLoading(true);
     setCurrentPlaylist(null); // Clear while generating
+    setSidebarTab('mood'); // Switch to mood tab to show generation progress if applicable
 
     try {
       // Collect titles of recently played songs to exclude
@@ -146,7 +186,9 @@ export default function App() {
         duration: p.duration,
         year: p.year,
         searchQuery: p.search_query,
-        thumbnailHint: p.thumbnail_hint
+        thumbnailHint: p.thumbnail_hint,
+        bpm: p.bpm,
+        energy: p.energy
       }));
 
       const newPlaylist: Playlist = {
@@ -178,6 +220,26 @@ export default function App() {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTrack) {
+      AuraSession.logTrack({
+        title: activeTrack.title,
+        artist: activeTrack.artist,
+        bpm: activeTrack.bpm || 110,
+        energy: activeTrack.energy || 6
+      });
+    }
+  }, [activeTrack]);
+
+  const handleAcceptSuggestion = () => {
+    if (suggestion) {
+      setSidebarTab('aura');
+      setShowSidebar(true);
+      auraChat.setInput(suggestion);
+      clearSuggestion();
     }
   };
 
@@ -241,118 +303,110 @@ export default function App() {
     >
       <EditorialBg />
       
+      <LyricsOverlay 
+        isOpen={showLyrics} 
+        onClose={() => setShowLyrics(false)} 
+        track={activeTrack}
+      />
+      
       {/* Header Navigation */}
-      <header className="h-16 lg:h-20 border-b border-white/10 flex items-center justify-between px-4 lg:px-10 bg-surface shrink-0 relative z-[70]">
-        <div className="flex items-center gap-3 md:gap-6">
+      <header className="h-16 lg:h-20 border-b border-white/5 flex items-center justify-between px-6 lg:px-12 bg-base/80 backdrop-blur-3xl shrink-0 relative z-[70]">
+        <div className="flex items-center gap-6 md:gap-10">
           <button 
             onClick={() => setShowSidebar(!showSidebar)}
-            className="p-3 lg:hidden text-white/40 hover:text-white"
+            className="flex items-center gap-3 group"
           >
-            <Sparkles className={`w-6 h-6 ${showSidebar ? 'text-accent' : ''}`} />
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="w-5 h-5 md:w-6 md:h-6 bg-accent rounded-full flex items-center justify-center">
-              <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-black rounded-sm rotate-45"></div>
+            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all shadow-[0_0_20px_rgba(204,255,0,0.1)] group-hover:shadow-[0_0_25px_rgba(204,255,0,0.3)] ${showSidebar ? 'bg-accent rotate-0' : 'bg-surface border border-white/10 group-hover:bg-white/5'}`}>
+              <Sparkles className={`w-4 h-4 md:w-5 md:h-5 transition-colors ${showSidebar ? 'text-black' : 'text-accent'}`} />
             </div>
-            <span className="font-mono text-[9px] md:text-[10px] tracking-widest text-accent whitespace-nowrap">AURA_DJ / V.1.0</span>
-          </div>
-        </div>
-        
-        <div className="hidden lg:flex gap-8 text-[10px] tracking-[0.2em] uppercase font-semibold text-white/40">
-          <button className="text-accent border-b border-accent pb-1">Session</button>
-          <button 
-            onClick={() => setShowHistory(!showHistory)}
-            className={`transition-colors hover:text-white ${showHistory ? 'text-accent' : ''}`}
-          >
-            History
+            <div className="flex flex-col text-left">
+              <h1 className="text-sm md:text-base font-bold tracking-tight uppercase leading-none">Aura DJ</h1>
+              <span className={`text-[8px] font-mono uppercase tracking-[0.3em] mt-1 transition-opacity ${showSidebar ? 'text-accent opacity-100' : 'text-white/40 opacity-60'}`}>Neural_Synapse_{showSidebar ? 'Open' : 'Link'}</span>
+            </div>
           </button>
+          
+          <nav className="hidden lg:flex items-center gap-8 border-l border-white/10 pl-10 h-8">
+            <button className="text-[10px] font-mono tracking-[0.3em] uppercase text-accent border-b border-accent pb-1">Session</button>
+            <button 
+              onClick={() => setShowHistory(!showHistory)}
+              className={`text-[10px] font-mono tracking-[0.3em] uppercase transition-colors hover:text-white ${showHistory ? 'text-accent' : 'text-white/40'}`}
+            >
+              History
+            </button>
+            <button className="text-[10px] font-mono tracking-[0.3em] uppercase text-white/20 hover:text-white transition-colors">Neural</button>
+          </nav>
         </div>
 
-        <div className="flex items-center gap-3 md:gap-6">
-          <div className="hidden sm:flex items-center gap-3">
-            <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="font-mono text-[9px] text-white/60 tracking-wider uppercase">Neural Active</span>
-          </div>
-          <div className="h-8 w-px bg-white/10 hidden sm:block" />
-          <div className="flex items-center gap-2 md:gap-4">
-             <button 
-               onClick={() => setShowHistory(!showHistory)}
-               className={`p-2 lg:hidden ${showHistory ? 'text-accent' : 'text-white/40'}`}
-             >
-               <History className="w-5 h-5" />
-             </button>
-             <div className="flex items-center gap-3 pl-2 sm:pl-0">
-               <span className="font-mono text-[9px] md:text-[10px] text-white/40 uppercase truncate max-w-[80px] md:max-w-[120px]">{user.email?.split('@')[0]}</span>
-               <button 
-                 onClick={logout}
-                 className="p-1.5 text-white/20 hover:text-white transition-colors"
-               >
-                 <LogOut className="w-3.5 h-3.5" />
-               </button>
-             </div>
+        <div className="flex items-center gap-4 md:gap-8">
+          <button 
+            onClick={() => setShowLyrics(true)}
+            className="group flex items-center gap-3"
+          >
+            <span className="hidden xl:inline text-[9px] font-mono text-white/30 uppercase tracking-[0.2em] group-hover:text-accent transition-colors">Lyrics Protocol</span>
+            <div className="w-9 h-9 rounded-full border border-white/10 flex items-center justify-center group-hover:border-accent group-hover:bg-accent/5 transition-all">
+              <Music2 className="w-4 h-4 text-white/40 group-hover:text-accent" />
+            </div>
+          </button>
+
+          <div className="h-10 w-px bg-white/5 mx-2 hidden md:block"></div>
+
+          <div className="flex items-center gap-4 group bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 rounded-full pl-4 pr-1 py-1 transition-all">
+            <button 
+              onClick={() => setActiveView('profile')}
+              className="text-right hidden sm:block text-left"
+            >
+              <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-white/90 truncate max-w-[100px]">{user.email?.split('@')[0]}</p>
+              <p className="text-[8px] font-mono text-accent/50 uppercase tracking-tighter mt-0.5">Status: Authorized</p>
+            </button>
+            <button 
+              onClick={() => setActiveView('profile')}
+              className="w-9 h-9 rounded-full border-2 border-white/10 overflow-hidden ring-2 ring-black group-hover:border-accent transition-all shrink-0"
+            >
+              <img src={user.photoURL || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${user.email}`} alt="Avatar" className="w-full h-full object-cover" />
+            </button>
+            <button 
+              onClick={logout}
+              className="p-2 text-white/10 hover:text-red-400 transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>
 
       <main className="flex-1 flex overflow-hidden relative">
-        {/* Sidebar: Mood Protocol */}
-        <AnimatePresence>
-          {(showSidebar || window.innerWidth >= 1024) && (
-            <motion.aside 
-              initial={window.innerWidth < 1024 ? { x: '-100%' } : {}}
-              animate={window.innerWidth < 1024 ? { x: 0 } : {}}
-              exit={window.innerWidth < 1024 ? { x: '-100%' } : {}}
-              className={`w-[280px] sm:w-80 border-r border-white/10 p-6 lg:p-10 flex flex-col justify-between overflow-y-auto bg-surface lg:bg-surface/50 absolute lg:relative inset-y-0 left-0 z-[80] lg:z-0`}
-            >
-              <div className="space-y-12">
-                <div className="flex items-center justify-between lg:hidden mb-4">
-                  <SectionLabel>Mood Protocol</SectionLabel>
-                  <button onClick={() => setShowSidebar(false)} className="text-white/40 p-2">
-                    <LogOut className="w-4 h-4 rotate-180" />
-                  </button>
-                </div>
-                
-                <MoodProtocol 
-                  input={input}
-                  setInput={setInput}
-                  isLoading={isLoading}
-                  handleGenerate={(e) => { handleGenerate(e); setShowSidebar(false); }}
-                  currentPlaylist={currentPlaylist}
-                />
-              </div>
-
-              <div className="mt-8 bg-accent/5 p-6 border border-accent/20 rounded-sm">
-                <p className="text-[10px] font-mono text-accent mb-2">NEURAL_STATUS</p>
-                <p className="text-[11px] leading-relaxed text-accent/70 italic">
-                  "Adapting audio parameters to match environmental frequency and neural output for immersive synchronization."
-                </p>
-              </div>
-            </motion.aside>
-          )}
-        </AnimatePresence>
-
         {/* Main Stage: Playlist View */}
         <section 
-          className="flex-1 p-5 md:p-8 lg:p-12 flex flex-col overflow-y-auto scrollbar-hide relative"
+          className="flex-1 lg:p-12 p-6 flex flex-col overflow-y-auto scrollbar-hide relative bg-base/20 transition-all"
         >
-          {/* Neural Experience Layer */}
-          <AnimatePresence>
-            {activeTrack && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
-              >
-                <div 
-                  className="absolute inset-0 opacity-10 blur-[100px] animate-pulse"
-                  style={{ backgroundColor: songExperience?.themeColor || 'var(--accent-color)' }}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {activeView === 'profile' ? (
+            <ProfilePage 
+              user={user}
+              history={history}
+              onPlayTrack={playTrack}
+              onBack={() => setActiveView('player')}
+            />
+          ) : (
+            <>
+              {/* Neural Experience Layer */}
+              <AnimatePresence>
+                {activeTrack && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
+                  >
+                    <div 
+                      className="absolute inset-0 opacity-10 blur-[100px] animate-pulse"
+                      style={{ backgroundColor: songExperience?.themeColor || 'var(--accent-color)' }}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-          <div className="mb-8 md:mb-10 lg:mb-12 flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/10 pb-8 md:pb-10 lg:pb-12 relative z-10 gap-8">
+              <div className="mb-8 md:mb-10 lg:mb-12 flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/10 pb-8 md:pb-10 lg:pb-12 relative z-10 gap-8">
             <div className="max-w-2xl w-full">
               <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter leading-tight md:leading-none mb-4 md:mb-6 uppercase break-words w-full">
                 {currentPlaylist?.title.split(' ').slice(0, 2).map((word, idx) => (
@@ -392,7 +446,7 @@ export default function App() {
                 )}
                 <div className="text-left md:text-right whitespace-nowrap">
                   <p className="text-4xl md:text-6xl font-mono font-light leading-none flex items-baseline justify-start md:justify-end gap-1">
-                    {String((playlistQueue.findIndex(t => t.searchQuery === activeTrack.searchQuery) ?? -1) + 1).padStart(2, '0')}
+                    {String(currentIndex + 1).padStart(2, '0')}
                     <span className="text-sm text-white/20">/{playlistQueue.length.toString().padStart(2, '0') || '10'}</span>
                   </p>
                   <p className="text-[10px] uppercase tracking-widest text-white/40 mt-2">Active Signal</p>
@@ -406,6 +460,8 @@ export default function App() {
             isExpLoading={isExpLoading}
             songExperience={songExperience}
           />
+            </>
+          )}
         </section>
 
         {/* History Overlay/Sidebar */}
@@ -470,25 +526,62 @@ export default function App() {
         />
         
         <YouTubePlayer />
-      </footer>
+    </footer>
 
-      {/* Neural Assistant Integration */}
-      <AuraAssistant isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
-      
-      <div className="fixed bottom-32 right-8 z-[150] flex flex-col items-end">
-        <button 
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-xl group border ${
-            isChatOpen 
-              ? 'bg-accent border-accent text-black rotate-90' 
-              : 'bg-surface border-white/10 text-accent hover:border-accent'
-          }`}
-        >
-          {isChatOpen ? <Pause className="w-6 h-6 fill-current" /> : <Sparkles className="w-6 h-6 animate-pulse group-hover:scale-110 transition-transform" />}
-        </button>
+    {/* Floating Aura Overlay */}
+    <SuggestionChip 
+      text={suggestion}
+      onDismiss={clearSuggestion}
+      onAccept={handleAcceptSuggestion}
+      corner={localStorage.getItem('aura_overlay_corner') || 'bottom-right'}
+    />
+    <UndoToast 
+      show={showUndoToast}
+      onUndo={undo}
+      onDismiss={() => setShowUndoToast(false)}
+    />
+    <AuraAssistant 
+      isOpen={showSidebar} 
+      onClose={() => setShowSidebar(prev => !prev)} 
+      {...auraChat}
+      activeTab={sidebarTab}
+    >
+      {/* 
+        This is passed as a named slot or child if I update AuraAssistant to handle tabs 
+        For now I will render MoodProtocol internally in AuraAssistant or pass it here.
+      */}
+      <div className="h-full flex flex-col overflow-hidden">
+        <div className="flex border-b border-white/5 shrink-0 bg-white/[0.02]">
+          <button 
+            onClick={() => setSidebarTab('mood')}
+            className={`flex-1 py-3 text-[9px] font-mono tracking-[0.2em] uppercase transition-all relative ${sidebarTab === 'mood' ? 'text-accent' : 'text-white/20 hover:text-white/40'}`}
+          >
+            Generation
+            {sidebarTab === 'mood' && <motion.div layoutId="overlay-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+          </button>
+          <button 
+            onClick={() => setSidebarTab('aura')}
+            className={`flex-1 py-3 text-[9px] font-mono tracking-[0.2em] uppercase transition-all relative ${sidebarTab === 'aura' ? 'text-accent' : 'text-white/20 hover:text-white/40'}`}
+          >
+            Neural AI
+            {sidebarTab === 'aura' && <motion.div layoutId="overlay-tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+           {sidebarTab === 'mood' ? (
+             <MoodProtocol 
+               input={input}
+               setInput={setInput}
+               isLoading={isLoading}
+               handleGenerate={(e) => handleGenerate(e)}
+               currentPlaylist={currentPlaylist}
+             />
+           ) : null}
+        </div>
       </div>
-
-    </div>
-  );
+    </AuraAssistant>
+  </div>
+);
 }
 

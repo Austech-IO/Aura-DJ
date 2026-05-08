@@ -1,14 +1,19 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { 
   Play, 
   Pause, 
-  ChevronRight, 
-  TrendingUp, 
-  ListMusic, 
-  Volume2 
+  SkipBack,
+  SkipForward,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Volume2,
+  Music2,
+  Activity
 } from 'lucide-react';
 import { usePlayer } from '../../core/PlayerContext';
+import { AudioVisualizer } from './AudioVisualizer';
 
 interface PlayerControlsProps {
   showLyrics: boolean;
@@ -21,6 +26,7 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({ showLyrics, setS
     isPlaying, 
     currentTime, 
     duration, 
+    buffered,
     volume, 
     repeatMode, 
     isShuffled,
@@ -48,105 +54,164 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({ showLyrics, setS
     seekTo(seekTime);
   };
 
+  const [hoverTime, setHoverTime] = React.useState<number | null>(null);
+  const [hoverX, setHoverX] = React.useState(0);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (duration === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, x / rect.width));
+    setHoverTime(percentage * duration);
+    setHoverX(x);
+  };
+
   return (
-    <div className="flex flex-col md:flex-row items-center justify-between w-full gap-4 md:gap-0 relative z-50 h-full">
-      {/* Track Progress */}
-      <div className="absolute top-0 left-0 right-0 z-[110] -translate-y-full md:translate-y-0">
-        <div className="flex justify-between items-center px-4 md:px-8 mb-1">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] md:text-[11px] font-mono font-bold tracking-tight uppercase truncate max-w-[200px] md:max-w-md lg:max-w-xl" style={{ color: 'var(--accent-color)' }}>
-              {activeTrack ? `${activeTrack.title} — ${activeTrack.artist}` : 'IDLE'}
-            </span>
-          </div>
-          <span className="text-[9px] md:text-[10px] font-mono text-white/30">
-            {activeTrack ? `${formatTime(currentTime)} / ${formatTime(duration)}` : '--:--'}
-          </span>
-        </div>
+    <div className="flex flex-col md:flex-row items-center justify-between w-full h-full px-6 lg:px-12 relative z-50 bg-base/80 backdrop-blur-3xl border-t border-white/5">
+      {/* Precision Seek Bar */}
+      <div className="absolute top-0 left-0 right-0 h-1 md:h-1.5 z-[110]">
         <div 
-          className="w-full h-1.5 md:h-1 bg-white/5 cursor-pointer relative group"
+          className="w-full h-full bg-white/[0.02] cursor-pointer relative group transition-all lg:hover:h-3"
           onClick={handleSeek}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoverTime(null)}
         >
-          <div className="absolute inset-y-0 left-0 right-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+          {/* Buffered Progress */}
+          <div 
+            className="absolute inset-y-0 left-0 bg-white/5 transition-all duration-300"
+            style={{ width: duration > 0 ? `${(buffered / duration) * 100}%` : "0%" }}
+          />
+
           <motion.div 
             initial={{ width: 0 }}
             animate={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : "0%" }}
-            className="h-full relative z-10"
+            transition={{ duration: 0.8, ease: "linear" }}
+            className="h-full relative z-10 shadow-[0_0_15px_rgba(204,255,0,0.4)]"
             style={{ backgroundColor: 'var(--accent-color)' }}
+          />
+
+          {/* Precision Tooltip */}
+          {hoverTime !== null && (
+            <div 
+              className="absolute -top-12 bg-black border border-white/10 px-3 py-1.5 rounded-lg text-[10px] font-mono text-accent pointer-events-none z-[120] shadow-2xl backdrop-blur-xl"
+              style={{ left: hoverX, transform: 'translateX(-50%)' }}
+            >
+              <div className="flex items-center gap-2">
+                <span className="opacity-40">SEEK</span>
+                <span className="font-bold">{formatTime(hoverTime)}</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Handle */}
+          <div 
+            className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-xl border-4 border-black"
+            style={{ left: duration > 0 ? `${(currentTime / duration) * 100}%` : "0%", transform: 'translate(-50%, -50%)' }}
           />
         </div>
       </div>
 
-      {/* Visualizer Plate */}
-      <div className="w-48 h-12 bg-white/5 border border-white/5 hidden md:flex items-center justify-center relative overflow-hidden">
-        <div className="flex gap-1 items-end h-6 relative z-10">
-          {[0.8, 0.4, 0.7, 0.9, 0.5, 0.6, 0.3, 0.7, 0.8].map((v, i) => (
-            <motion.div 
-              key={i}
-              animate={{ height: activeTrack && isPlaying ? [v * 100 + "%", (1 - v) * 100 + "%", v * 100 + "%"] : v * 24 }}
-              transition={{ repeat: Infinity, duration: 0.5 + i * 0.1 }}
-              className="w-1" 
-              style={{ backgroundColor: 'var(--accent-color)' }}
-            />
-          ))}
+      {/* Track Info */}
+      <div className="flex items-center gap-6 w-full md:w-auto mt-2 md:mt-0">
+        <div className="flex flex-col">
+          <h4 className="text-sm font-bold uppercase tracking-tight truncate max-w-[150px] md:max-w-[200px] lg:max-w-xs text-accent drop-shadow-[0_0_8px_rgba(204,255,0,0.1)]">{activeTrack?.title || 'Frequency Silent'}</h4>
+          <p className="text-[10px] font-mono text-white/20 uppercase tracking-[0.2em] truncate">{activeTrack?.artist || 'Ready for Node'}</p>
+        </div>
+        <div className="flex items-center gap-3 font-mono text-[9px] text-accent/40 bg-accent/5 px-2 py-1 rounded border border-accent/10 tabular-nums">
+          <span className="text-accent">{formatTime(currentTime)}</span>
+          <span className="opacity-20">/</span>
+          <span>{formatTime(duration)}</span>
         </div>
       </div>
 
-      {/* Controls Container */}
-      <div className="flex items-center justify-between w-full md:w-auto md:gap-12">
-        <div className="flex items-center gap-2 md:gap-8">
-           <div className="flex items-center gap-1 md:gap-3 pr-2 md:pr-4 border-r border-white/5">
-              <button 
-                onClick={toggleShuffle}
-                className={`p-2 transition-colors ${isShuffled ? 'text-accent' : 'text-white/20 hover:text-white'}`}
-              >
-                 <motion.div animate={isShuffled ? { rotate: [0, 10, -10, 0] } : {}}>
-                   <TrendingUp className="w-4 h-4" />
-                 </motion.div>
-              </button>
-              <button 
-                onClick={toggleRepeat}
-                className={`p-2 transition-colors flex items-center relative ${repeatMode !== 'none' ? 'text-accent' : 'text-white/20 hover:text-white'}`}
-              >
-                 <ListMusic className="w-4 h-4" />
-                 {repeatMode === 'one' && <span className="absolute top-0 right-0 text-[8px] font-bold">1</span>}
-              </button>
-           </div>
-
-           <div className="flex items-center gap-2 md:gap-4 ml-2">
-             <button onClick={playPrev} className="p-2 text-white/30 hover:text-white transition-colors">
-                <ChevronRight className="w-4 h-4 rotate-180 fill-current" />
-             </button>
-             <button 
-                onClick={togglePlay}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/20 flex items-center justify-center hover:text-black transition-all"
-                onMouseEnter={(e) => { if(window.innerWidth > 768) e.currentTarget.style.backgroundColor = 'var(--accent-color)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-              >
-                {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 ml-0.5 fill-current" />}
-             </button>
-             <button onClick={playNext} className="p-2 text-white/30 hover:text-white transition-colors">
-                <Play className="w-4 h-4 fill-current" />
-             </button>
-           </div>
+      {/* Playback Controls */}
+      <div className="flex items-center gap-4 lg:gap-10">
+        <div className="flex items-center gap-1 md:gap-3">
+          <button 
+            onClick={toggleShuffle}
+            className={`p-2 transition-all hover:scale-110 ${isShuffled ? 'text-accent drop-shadow-[0_0_8px_rgba(204,255,0,0.5)]' : 'text-white/20 hover:text-white'}`}
+            title="Shuffle"
+          >
+            <Shuffle className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={toggleRepeat}
+            className={`p-2 transition-all hover:scale-110 relative ${repeatMode !== 'none' ? 'text-accent drop-shadow-[0_0_8px_rgba(204,255,0,0.5)]' : 'text-white/20 hover:text-white'}`}
+            title="Repeat"
+          >
+            {repeatMode === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
+          </button>
         </div>
-        
-        <div className="flex items-center gap-2 md:gap-6">
-           <button 
-             onClick={() => setShowLyrics(!showLyrics)}
-             className={`p-2 transition-all ${showLyrics ? 'text-accent' : 'text-white/30 hover:text-white'}`}
-           >
-             <ListMusic className="w-5 h-5" />
-           </button>
-           <div className="hidden sm:flex items-center gap-3 group">
-             <Volume2 className="w-4 h-4 text-white/30 group-hover:text-accent transition-colors" />
-             <input 
-                type="range" 
-                min="0" max="100" 
-                value={volume}
-                onChange={(e) => setVolume(parseInt(e.target.value))}
-                className="w-20 md:w-32 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-accent"
-              />
-           </div>
+
+        <div className="flex items-center gap-3 lg:gap-6 bg-white/[0.02] border border-white/5 rounded-full p-1.5 px-6 shadow-inner glass-panel-saas">
+          <button 
+            onClick={playPrev}
+            className="p-2 text-white/30 hover:text-white transition-all active:scale-90"
+            aria-label="Previous"
+          >
+            <SkipBack className="w-5 h-5 fill-current" />
+          </button>
+          
+          <button 
+            onClick={togglePlay}
+            disabled={!activeTrack}
+            className="w-12 h-12 rounded-full bg-accent text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_25px_rgba(204,255,0,0.3)] disabled:opacity-20 disabled:grayscale"
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 fill-current ml-1" />}
+          </button>
+
+          <button 
+            onClick={playNext}
+            className="p-2 text-white/30 hover:text-white transition-all active:scale-90"
+            aria-label="Next"
+          >
+            <SkipForward className="w-5 h-5 fill-current" />
+          </button>
+        </div>
+
+        {/* Visualizer Plate */}
+        <div className="w-48 h-12 glass-panel-saas hidden xl:flex items-center justify-center relative overflow-hidden group rounded-xl border-white/5 bg-white/[0.01]">
+          <div className="absolute inset-x-0 bottom-0">
+             <AudioVisualizer />
+          </div>
+          <div className="absolute top-1 left-3 flex items-center gap-2 opacity-20 group-hover:opacity-100 transition-opacity">
+            <Activity className="w-2.5 h-2.5 text-accent animate-pulse" />
+            <span className="text-[7px] font-mono uppercase tracking-[0.4em]">Synaptic_Feed</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Utilities */}
+      <div className="flex items-center gap-6 w-full md:w-64 mb-4 md:mb-0">
+        <button 
+          onClick={() => setShowLyrics(!showLyrics)}
+          className={`group flex items-center gap-3 p-2 transition-all ${showLyrics ? 'text-accent' : 'text-white/20 hover:text-white'}`}
+        >
+          <Music2 className="w-4 h-4" />
+          <span className="text-[10px] font-mono font-bold tracking-widest hidden lg:block opacity-0 group-hover:opacity-100 transition-opacity uppercase">Lyrics</span>
+        </button>
+
+        <div className="flex-1 flex items-center gap-4 group/vol px-4 py-2 bg-white/[0.02] rounded-full border border-white/5 hover:border-white/10 transition-colors">
+          <Volume2 className="w-4 h-4 text-white/20 group-hover/vol:text-accent transition-colors" />
+          <div className="flex-1 h-1 bg-white/5 relative cursor-pointer">
+            <div 
+              className="absolute inset-y-0 left-0 bg-white/20 group-hover/vol:bg-accent transition-colors shadow-[0_0_8px_rgba(204,255,0,0.3)]"
+              style={{ width: `${volume}%` }}
+            />
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              value={volume} 
+              onChange={(e) => setVolume(Number(e.target.value))}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            />
+            <div 
+              className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full opacity-0 group-hover/vol:opacity-100 transition-opacity shadow-xl"
+              style={{ left: `${volume}%`, transform: 'translate(-50%, -50%)' }}
+            />
+          </div>
         </div>
       </div>
     </div>

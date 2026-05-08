@@ -1,8 +1,9 @@
-import React from 'react';
-import { Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sparkles, Search, Plus, Music } from 'lucide-react';
 import { SectionLabel } from '../ui/SectionLabel';
-import { Playlist } from '../../types';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Playlist, Track } from '../../types';
+import { motion, AnimatePresence } from 'motion/react';
+import { usePlayer } from '../../core/PlayerContext';
 
 interface MoodProtocolProps {
   input: string;
@@ -19,6 +20,36 @@ export const MoodProtocol: React.FC<MoodProtocolProps> = ({
   handleGenerate,
   currentPlaylist
 }) => {
+  const { addTrackToQueue } = usePlayer();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Track[]>([]);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+      const data = await res.json();
+      
+      const tracks: Track[] = data.map((item: any) => ({
+        title: item.title,
+        artist: item.artist || "Unknown Artist",
+        album: "Search Result",
+        genre: "Various",
+        duration: "3:30",
+        year: new Date().getFullYear().toString(),
+        searchQuery: item.title + " " + (item.artist || ""),
+        youtubeId: item.id?.videoId || item.id
+      }));
+      setSearchResults(tracks);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
   return (
     <div className="space-y-12">
       <section>
@@ -50,12 +81,75 @@ export const MoodProtocol: React.FC<MoodProtocolProps> = ({
           {["Lofi Beats", "Night Drive", "Cyberpunk", "Zen Focus"].map(tag => (
             <button 
               key={tag}
-              onClick={() => { setInput(tag); }}
+              onClick={() => { 
+                setInput(tag);
+                handleGenerate(undefined, tag);
+              }}
               className="text-[9px] font-mono text-left uppercase tracking-wider text-white/30 p-2 border border-white/5 hover:border-accent/30 hover:text-accent transition-all"
             >
               {tag}
             </button>
           ))}
+        </div>
+      </section>
+
+      <section className="space-y-6">
+        <SectionLabel>Augment Queue</SectionLabel>
+        <div className="relative group">
+          <form onSubmit={handleSearch} className="relative">
+            <input 
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search global frequencies..."
+              className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-xs font-medium placeholder:text-white/10 focus:outline-none focus:border-accent/40 focus:bg-white/[0.05] transition-all"
+            />
+            <button 
+              type="submit"
+              disabled={isSearching || !searchQuery.trim()}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-accent transition-colors disabled:opacity-30"
+            >
+              {isSearching ? (
+                <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Search className="w-4 h-4" />
+              )}
+            </button>
+          </form>
+        </div>
+
+        <div className="space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+          <AnimatePresence mode="popLayout">
+            {searchResults.map((track, i) => (
+              <motion.div 
+                key={track.youtubeId + i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="flex items-center justify-between p-3 rounded-lg hover:bg-white/[0.03] border border-transparent hover:border-white/5 transition-all group/item"
+              >
+                <div className="flex-1 truncate pr-4">
+                  <p className="text-[11px] font-bold truncate uppercase tracking-tight text-accent/90 group-hover/item:text-accent transition-colors">{track.title}</p>
+                  <p className="text-[9px] font-mono opacity-30 truncate uppercase mt-0.5">{track.artist}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    addTrackToQueue(track);
+                    setSearchResults(prev => prev.filter(t => t.youtubeId !== track.youtubeId));
+                  }}
+                  className="w-8 h-8 rounded-lg bg-accent/5 border border-accent/10 flex items-center justify-center text-accent opacity-0 group-hover/item:opacity-100 hover:bg-accent hover:text-black transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {searchResults.length === 0 && !isSearching && searchQuery && (
+             <div className="text-center py-12 border border-dashed border-white/5 rounded-xl">
+               <Music className="w-8 h-8 text-white/5 mx-auto mb-3" />
+               <p className="text-[10px] font-mono text-white/10 uppercase tracking-widest">Awaiting Command</p>
+             </div>
+          )}
         </div>
       </section>
 

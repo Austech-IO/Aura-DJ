@@ -8,7 +8,12 @@ export interface Track {
   searchQuery: string;
   thumbnailHint?: string;
   youtubeId?: string;
+  spotifyId?: string;
+  spotifyUri?: string;
   thumbnail?: string;
+  isDownloaded?: boolean;
+  bpm?: number;
+  energy?: number;
 }
 
 export interface SongExperience {
