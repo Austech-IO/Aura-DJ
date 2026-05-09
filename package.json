@@ -8,7 +8,6 @@
     "build:client": "vite build",
     "build:server": "esbuild server.ts --bundle --platform=node --format=esm --outfile=dist/server.js --external:vite --external:express --external:youtube-search-api --external:@google/genai",
     "build": "npm run build:client && npm run build:server",
-    "vercel-build": "npm run build",
     "start": "NODE_ENV=production node dist/server.js",
     "lint": "tsc --noEmit"
   },

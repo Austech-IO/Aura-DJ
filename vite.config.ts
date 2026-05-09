@@ -15,13 +15,17 @@ export default defineConfig(({mode}) => {
       },
     },
     build: {
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom'],
-            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-            'vendor-motion': ['framer-motion', 'motion/react'],
-            'vendor-icons': ['lucide-react'],
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('framer-motion') || id.includes('motion/react')) return 'vendor-motion';
+              if (id.includes('lucide-react')) return 'vendor-icons';
+              if (id.includes('react')) return 'vendor-react';
+              return 'vendor-base';
+            }
           },
         },
       },
