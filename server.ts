@@ -454,9 +454,22 @@ Conversational tone. No quotes. No punctuation at end.`;
 // Only start the server if this file is run directly (not through a function import like Vercel)
 if (!process.env.VERCEL) {
   createServer().then(app => {
-    const PORT = 3000;
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Aura DJ Server running on http://localhost:${PORT}`);
+    const PORT = process.env.PORT || 3000;
+    const server = app.listen(PORT as number, "0.0.0.0", () => {
+      console.log(`[Aura DJ] 🚀 Production server active on port ${PORT}`);
+      console.log(`[Aura DJ] 🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
+
+    // Graceful shutdown
+    const shutdown = () => {
+      console.log('[Aura DJ] 🛑 Shutting down server...');
+      server.close(() => {
+        console.log('[Aura DJ] 🔌 Server closed.');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
   });
 }

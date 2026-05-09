@@ -14,6 +14,20 @@ export default defineConfig(({mode}) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('framer-motion') || id.includes('motion/react')) return 'vendor-motion';
+              if (id.includes('react')) return 'vendor-react';
+              return 'vendor';
+            }
+          },
+        },
+      },
+    },
     server: {
       // Disable HMR entirely when DISABLE_HMR=true (AI Studio / sandboxed envs).
       // When enabled, use a short timeout so failed WS connections fail fast
