@@ -17,13 +17,11 @@ export default defineConfig(({mode}) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('firebase')) return 'vendor-firebase';
-              if (id.includes('framer-motion') || id.includes('motion/react')) return 'vendor-motion';
-              if (id.includes('react')) return 'vendor-react';
-              return 'vendor';
-            }
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            'vendor-motion': ['framer-motion', 'motion/react'],
+            'vendor-icons': ['lucide-react'],
           },
         },
       },
@@ -34,5 +32,8 @@ export default defineConfig(({mode}) => {
       // instead of leaving an unhandled rejection floating in the console.
       hmr: disableHmr ? false : { timeout: 5000 },
     },
+    define: {
+      'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY),
+    }
   };
 });

@@ -14,6 +14,13 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
+// Spotify SDK Initialization Hook
+// This prevents "onSpotifyWebPlaybackSDKReady is not defined" errors
+// if the SDK loads before the React component mounts.
+(window as any).onSpotifyWebPlaybackSDKReady = () => {
+  console.log("[Aura DJ] 🎧 Spotify Web Playback SDK is ready (Initialized via main.tsx)");
+};
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <PlayerProvider>
