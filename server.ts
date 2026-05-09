@@ -458,6 +458,19 @@ if (!process.env.VERCEL) {
     const server = app.listen(PORT as number, "0.0.0.0", () => {
       console.log(`[Aura DJ] 🚀 Production server active on port ${PORT}`);
       console.log(`[Aura DJ] 🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`[Aura DJ] 🔑 GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'Set' : 'Missing'}`);
+      console.log(`[Aura DJ] 🎵 SPOTIFY_CLIENT_ID: ${process.env.VITE_SPOTIFY_CLIENT_ID ? 'Set' : 'Missing'}`);
+      console.log(`[Aura DJ] 🔐 SPOTIFY_CLIENT_SECRET: ${process.env.SPOTIFY_CLIENT_SECRET ? 'Set' : 'Missing'}`);
+    });
+
+    // Handle process errors
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('[Aura DJ] ❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    });
+
+    process.on('uncaughtException', (error) => {
+      console.error('[Aura DJ] ❌ Uncaught Exception:', error);
+      process.exit(1);
     });
 
     // Graceful shutdown

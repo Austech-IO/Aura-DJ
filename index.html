@@ -54,6 +54,13 @@
 
           console.error('[Aura DJ Promise Diagnostic]:', event.reason);
         }, true);
+
+        // Spotify SDK initialization hook
+        window.onSpotifyWebPlaybackSDKReady = () => {
+          console.log('[Aura DJ] 🎧 Spotify Web Playback SDK is ready.');
+          // The App component or specific services will handle player connection 
+          // once they detect this global exists or via its own listeners.
+        };
       })();
     </script>
     <meta charset="UTF-8" />
